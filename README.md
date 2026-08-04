@@ -2,7 +2,7 @@
 
 > A minimal, locally-runnable AI research agent that turns a natural-language question into a cited Markdown report.
 
-**Status: M1 complete — repo scaffold and dependencies in place. Core logic not yet implemented.**
+**Status: M2 complete — `web_search` (DuckDuckGo) and `fetch_page` (Playwright) implemented and tested.**
 
 ---
 
@@ -19,13 +19,13 @@ Existing research agents either live behind a paywall (Perplexity, You.com) or a
 | Milestone | Scope | State |
 |-----------|-------|-------|
 | M1 | Repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README | **done** |
-| M2 | `tools.py` — `web_search`, `fetch_page`, `extract_facts` | planned |
+| M2 | `tools.py` — `web_search`, `fetch_page`; smoke tests in `tests/` | **done** |
 | M3 | `agent.py` — ReAct loop with citation tracking | planned |
 | M4 | `api.py` — FastAPI `/research` endpoint | planned |
 | M5 | Streamlit UI | planned |
 | M6 | End-to-end tests, Quickstart polish, Docker image | planned |
 
-M1 delivers a runnable `pip install` baseline. All `src/` modules exist as stubs; no agent behaviour is implemented yet.
+M1 delivers a runnable `pip install` baseline. M2 implements the two browser/search tools and their smoke tests.
 
 ## Architecture
 
@@ -66,11 +66,15 @@ autoresearch-agent/
 ├── src/
 │   ├── __init__.py      # makes src a Python package
 │   ├── agent.py         # ReAct agent loop (stub — M3)
-│   ├── tools.py         # web_search, fetch_page, extract_facts (stub — M2)
+│   ├── tools.py         # web_search, fetch_page (M2 done); extract_facts, finish_report (M3)
 │   └── api.py           # FastAPI /research endpoint (stub — M4)
+├── tests/
+│   ├── __init__.py
+│   └── test_tools.py    # smoke tests for web_search and fetch_page
 ├── reports/             # generated Markdown reports (git-ignored)
 │   └── .gitkeep
-├── requirements.txt     # pinned runtime dependencies
+├── pytest.ini           # asyncio_mode=auto, integration marker
+├── requirements.txt     # pinned runtime + test dependencies
 ├── LICENSE              # MIT
 └── README.md
 ```
@@ -87,9 +91,20 @@ autoresearch-agent/
 | `beautifulsoup4` | HTML parsing and text extraction |
 | `python-multipart` | FastAPI form-data support |
 
+## Running tests
+
+```bash
+# Unit tests only (no network or browser required)
+pytest -x -m "not integration" tests/
+
+# All tests including integration (requires: playwright install chromium)
+pytest -x tests/
+```
+
 ## Roadmap
 
-- **M2** — implement `web_search` (DuckDuckGo) and `fetch_page` (Playwright)
+- ~~**M1** — repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README~~ done
+- ~~**M2** — implement `web_search` (DuckDuckGo) and `fetch_page` (Playwright); smoke tests~~ done
 - **M3** — implement the ReAct agent loop with citation accumulation
 - **M4** — wire tools into the FastAPI endpoint; add `/research` POST handler
 - **M5** — Streamlit front-end with streaming output
