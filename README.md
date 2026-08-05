@@ -2,7 +2,7 @@
 
 > A minimal, locally-runnable AI research agent that turns a natural-language question into a cited Markdown report.
 
-**Status: M3 complete — ReAct agent loop with `extract_facts`, `finish_report`, and `AgentLoop` implemented and tested.**
+**Status: M4 complete — FastAPI backend with `/research` POST and `/research/stream` SSE endpoints implemented and tested.**
 
 ---
 
@@ -21,11 +21,11 @@ Existing research agents either live behind a paywall (Perplexity, You.com) or a
 | M1 | Repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README | **done** |
 | M2 | `tools.py` — `web_search`, `fetch_page`; smoke tests in `tests/` | **done** |
 | M3 | `agent.py` — ReAct loop with citation tracking | **done** |
-| M4 | `api.py` — FastAPI `/research` endpoint | planned |
+| M4 | `api.py` — FastAPI `/research` endpoint + SSE stream | **done** |
 | M5 | Streamlit UI | planned |
 | M6 | End-to-end tests, Quickstart polish, Docker image | planned |
 
-M1 delivers a runnable `pip install` baseline. M2 implements the two browser/search tools and their smoke tests. M3 adds the full ReAct agent loop: `extract_facts` (LLM sub-call), `finish_report` (Markdown writer), and `AgentLoop` (Claude tool-calling loop).
+M1 delivers a runnable `pip install` baseline. M2 implements the two browser/search tools and their smoke tests. M3 adds the full ReAct agent loop: `extract_facts` (LLM sub-call), `finish_report` (Markdown writer), and `AgentLoop` (Claude tool-calling loop). M4 wraps the agent in a FastAPI backend with a synchronous `/research` POST endpoint and a `/research/stream` SSE endpoint for live step-by-step logs.
 
 ## Architecture
 
@@ -57,11 +57,22 @@ pip install -r requirements.txt
 playwright install chromium
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# Run a research query
+# Run a research query via CLI
 python -m src.agent "What is the state of nuclear fusion in 2026?"
 
 # With custom depth (number of pages to visit)
 python -m src.agent "What is quantum computing?" --depth 5
+
+# Start the FastAPI backend
+uvicorn src.api:app --reload
+
+# POST a research query via the API
+curl -X POST http://localhost:8000/research \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is nuclear fusion?", "depth": 2}'
+
+# Stream live agent steps via SSE
+curl -N "http://localhost:8000/research/stream?query=nuclear+fusion&depth=2"
 ```
 
 The report is saved to `reports/<slug>-<timestamp>.md` and also printed to stdout.
@@ -74,11 +85,12 @@ autoresearch-agent/
 │   ├── __init__.py      # makes src a Python package
 │   ├── agent.py         # ReAct agent loop (AgentLoop, TOOL_SCHEMAS, CLI entry point)
 │   ├── tools.py         # web_search, fetch_page, extract_facts, finish_report
-│   └── api.py           # FastAPI /research endpoint (stub — M4)
+│   └── api.py           # FastAPI /research + /research/stream endpoints
 ├── tests/
 │   ├── __init__.py
 │   ├── test_tools.py    # smoke tests for web_search and fetch_page
-│   └── test_agent.py    # unit tests for AgentLoop, extract_facts, finish_report
+│   ├── test_agent.py    # unit tests for AgentLoop, extract_facts, finish_report
+│   └── test_api.py      # unit tests for FastAPI endpoints (mocked agent)
 ├── reports/             # generated Markdown reports (git-ignored)
 │   └── .gitkeep
 ├── pytest.ini           # asyncio_mode=auto, integration marker
@@ -114,7 +126,7 @@ pytest -x tests/
 - ~~**M1** — repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README~~ done
 - ~~**M2** — implement `web_search` (DuckDuckGo) and `fetch_page` (Playwright); smoke tests~~ done
 - ~~**M3** — implement the ReAct agent loop with citation accumulation~~ done
-- **M4** — wire tools into the FastAPI endpoint; add `/research` POST handler
+- ~~**M4** — FastAPI `/research` POST + `/research/stream` SSE endpoint~~ done
 - **M5** — Streamlit front-end with streaming output
 - **M6** — integration tests, Docker image, polished Quickstart
 
