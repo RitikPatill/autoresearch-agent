@@ -81,5 +81,74 @@ async def fetch_page(url: str) -> str:
                 pass
 
 
-# TODO M3: implement extract_facts(text, question) -> list[str]  (LLM sub-call)
-# TODO M3: implement finish_report(question, facts, citations) -> str
+import asyncio
+import json
+import os
+import re as _re
+import time
+
+import anthropic as _anthropic
+
+
+async def extract_facts(text: str, question: str) -> list[str]:
+    """Extract bullet-point facts relevant to *question* from *text*.
+
+    Makes a sub-call to claude-haiku-4-5-20251001 and parses lines starting
+    with "- ".  Returns [] on any error — never raises.
+    """
+    try:
+        client = _anthropic.AsyncAnthropic()
+        prompt = (
+            f"Research question: {question}\n\n"
+            f"Page text:\n{text}\n\n"
+            "Extract the most relevant facts from the page text that help answer "
+            "the research question. Return ONLY bullet points, one per line, "
+            'each starting with "- ". Be concise.'
+        )
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text if response.content else ""
+        facts = [line[2:].strip() for line in raw.splitlines() if line.startswith("- ")]
+        return facts
+    except Exception:
+        return []
+
+
+def finish_report(
+    question: str,
+    summary: str,
+    sections: list[dict],
+    citations: list[str],
+) -> str:
+    """Assemble and save a Markdown research report.
+
+    Writes to reports/<slug>-<timestamp>.md (creates dir if absent).
+    Returns the full Markdown string.
+    """
+    timestamp = time.strftime("%Y-%m-%dT%H-%M-%S")
+    slug = _re.sub(r"[^\w]+", "-", question.lower())[:60].strip("-")
+    filename = f"reports/{slug}-{timestamp}.md"
+
+    lines: list[str] = []
+    lines.append(f"# {question}\n")
+    lines.append(f"*Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}*\n")
+    lines.append("## Summary\n")
+    lines.append(f"{summary}\n")
+    for section in sections:
+        lines.append(f"## {section['heading']}\n")
+        lines.append(f"{section['body']}\n")
+    if citations:
+        lines.append("## References\n")
+        for i, url in enumerate(citations, 1):
+            lines.append(f"{i}. {url}")
+
+    report_md = "\n".join(lines)
+
+    os.makedirs("reports", exist_ok=True)
+    with open(filename, "w", encoding="utf-8") as fh:
+        fh.write(report_md)
+
+    return report_md

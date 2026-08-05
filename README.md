@@ -2,7 +2,7 @@
 
 > A minimal, locally-runnable AI research agent that turns a natural-language question into a cited Markdown report.
 
-**Status: M2 complete — `web_search` (DuckDuckGo) and `fetch_page` (Playwright) implemented and tested.**
+**Status: M3 complete — ReAct agent loop with `extract_facts`, `finish_report`, and `AgentLoop` implemented and tested.**
 
 ---
 
@@ -20,12 +20,12 @@ Existing research agents either live behind a paywall (Perplexity, You.com) or a
 |-----------|-------|-------|
 | M1 | Repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README | **done** |
 | M2 | `tools.py` — `web_search`, `fetch_page`; smoke tests in `tests/` | **done** |
-| M3 | `agent.py` — ReAct loop with citation tracking | planned |
+| M3 | `agent.py` — ReAct loop with citation tracking | **done** |
 | M4 | `api.py` — FastAPI `/research` endpoint | planned |
 | M5 | Streamlit UI | planned |
 | M6 | End-to-end tests, Quickstart polish, Docker image | planned |
 
-M1 delivers a runnable `pip install` baseline. M2 implements the two browser/search tools and their smoke tests.
+M1 delivers a runnable `pip install` baseline. M2 implements the two browser/search tools and their smoke tests. M3 adds the full ReAct agent loop: `extract_facts` (LLM sub-call), `finish_report` (Markdown writer), and `AgentLoop` (Claude tool-calling loop).
 
 ## Architecture
 
@@ -50,14 +50,21 @@ CLI / Streamlit UI
 
 ## Quick start
 
-> Full instructions will be added in M6. The commands below install all dependencies.
-
 ```bash
 git clone <repo>
 cd autoresearch-agent
 pip install -r requirements.txt
 playwright install chromium
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Run a research query
+python -m src.agent "What is the state of nuclear fusion in 2026?"
+
+# With custom depth (number of pages to visit)
+python -m src.agent "What is quantum computing?" --depth 5
 ```
+
+The report is saved to `reports/<slug>-<timestamp>.md` and also printed to stdout.
 
 ## Project structure
 
@@ -65,12 +72,13 @@ playwright install chromium
 autoresearch-agent/
 ├── src/
 │   ├── __init__.py      # makes src a Python package
-│   ├── agent.py         # ReAct agent loop (stub — M3)
-│   ├── tools.py         # web_search, fetch_page (M2 done); extract_facts, finish_report (M3)
+│   ├── agent.py         # ReAct agent loop (AgentLoop, TOOL_SCHEMAS, CLI entry point)
+│   ├── tools.py         # web_search, fetch_page, extract_facts, finish_report
 │   └── api.py           # FastAPI /research endpoint (stub — M4)
 ├── tests/
 │   ├── __init__.py
-│   └── test_tools.py    # smoke tests for web_search and fetch_page
+│   ├── test_tools.py    # smoke tests for web_search and fetch_page
+│   └── test_agent.py    # unit tests for AgentLoop, extract_facts, finish_report
 ├── reports/             # generated Markdown reports (git-ignored)
 │   └── .gitkeep
 ├── pytest.ini           # asyncio_mode=auto, integration marker
@@ -105,7 +113,7 @@ pytest -x tests/
 
 - ~~**M1** — repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README~~ done
 - ~~**M2** — implement `web_search` (DuckDuckGo) and `fetch_page` (Playwright); smoke tests~~ done
-- **M3** — implement the ReAct agent loop with citation accumulation
+- ~~**M3** — implement the ReAct agent loop with citation accumulation~~ done
 - **M4** — wire tools into the FastAPI endpoint; add `/research` POST handler
 - **M5** — Streamlit front-end with streaming output
 - **M6** — integration tests, Docker image, polished Quickstart
