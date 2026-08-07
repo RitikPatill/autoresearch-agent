@@ -1,31 +1,67 @@
 # AutoResearch Agent
 
-> A minimal, locally-runnable AI research agent that turns a natural-language question into a cited Markdown report.
+> A local AI agent that takes a research question, browses the web autonomously, and produces a cited markdown report.
 
-**Status: M5 complete — Streamlit demo UI with live SSE step log and Markdown report panel.**
+<!-- TODO: replace with a 5-10 second demo gif. Record with ScreenToGif on
+     Windows or peek on macOS. Save to docs/demo.gif and update path here. -->
+![demo](docs/demo.gif)
 
----
+## What it is
 
-## What it does
+AutoResearch Agent accepts a plain-English research question and returns a structured Markdown report with numbered citations. It orchestrates Claude claude-sonnet-4-6 through a ReAct-style tool-use loop: the model decides when to search the web, which pages to fetch, and when it has gathered enough evidence to synthesise an answer. All page fetching goes through a headless Playwright browser, so JavaScript-rendered content is handled without extra configuration.
 
-AutoResearch Agent accepts a plain-English research question, autonomously searches the web using DuckDuckGo, fetches and parses pages with a headless Playwright browser, and synthesises findings into a structured Markdown report with numbered citations. The entire agent loop — plan, search, fetch, extract, synthesise — is orchestrated by Claude claude-sonnet-4-6 via Anthropic's tool-use API. No subscriptions, no GPU, no 10 000-line frameworks required.
+The entire agent loop — plan, search, fetch, extract, synthesise — is roughly 500 lines of Python with no framework dependencies beyond the Anthropic SDK. DuckDuckGo HTML search is used for zero-cost web access; no API keys beyond `ANTHROPIC_API_KEY` are required.
 
-## Motivation
+## Quickstart
 
-Existing research agents either live behind a paywall (Perplexity, You.com) or are buried inside massive orchestration frameworks (LangChain, AutoGPT) that make it impossible to see the underlying ReAct loop. This project shows in roughly 500 lines of clean Python exactly how tool-calling, observation loops, and citation tracking work — making it an ideal portfolio piece for AI/ML and applied LLM engineering roles.
+```bash
+git clone https://github.com/RitikPatill/autoresearch-agent.git
+cd autoresearch-agent
 
-## What works now
+# Install Python dependencies and the headless browser
+pip install -r requirements.txt
+playwright install chromium
 
-| Milestone | Scope | State |
-|-----------|-------|-------|
-| M1 | Repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README | **done** |
-| M2 | `tools.py` — `web_search`, `fetch_page`; smoke tests in `tests/` | **done** |
-| M3 | `agent.py` — ReAct loop with citation tracking | **done** |
-| M4 | `api.py` — FastAPI `/research` endpoint + SSE stream | **done** |
-| M5 | Streamlit UI (`app.py`) with live SSE log + Markdown report | **done** |
-| M6 | End-to-end tests, Quickstart polish, Docker image | planned |
+# Provide your Anthropic key
+export ANTHROPIC_API_KEY=sk-ant-...
 
-M1 delivers a runnable `pip install` baseline. M2 implements the two browser/search tools and their smoke tests. M3 adds the full ReAct agent loop: `extract_facts` (LLM sub-call), `finish_report` (Markdown writer), and `AgentLoop` (Claude tool-calling loop). M4 wraps the agent in a FastAPI backend with a synchronous `/research` POST endpoint and a `/research/stream` SSE endpoint for live step-by-step logs. M5 adds `app.py`, a single-page Streamlit UI: query input, depth slider, live agent-step log panel (consuming the SSE stream), and a final rendered Markdown report with a download button.
+# Run a query from the CLI
+python -m src.agent "What is the state of nuclear fusion in 2026?"
+```
+
+The report is written to `reports/<slug>.md`.
+
+## Usage
+
+**CLI** — the primary interface:
+
+```bash
+python -m src.agent "Your research question here" --depth 3
+```
+
+`--depth` controls the maximum number of pages the agent will visit (default: 3).
+
+**API** — start the FastAPI server, then POST a query:
+
+```bash
+uvicorn src.api:app --reload
+
+curl -X POST http://localhost:8000/research \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is nuclear fusion?", "depth": 2}'
+
+# Stream live agent steps via SSE
+curl -N "http://localhost:8000/research/stream?query=nuclear+fusion&depth=2"
+```
+
+**Streamlit UI** — visual interface with a live step log and final report panel:
+
+```bash
+uvicorn src.api:app --reload   # terminal 1
+streamlit run app.py           # terminal 2
+```
+
+Open `http://localhost:8501`, enter a question, and watch the agent work in real time.
 
 ## Architecture
 
@@ -37,8 +73,8 @@ CLI / Streamlit UI
       │
       ▼
   AgentLoop (ReAct)
-  ├── tool: web_search  (DuckDuckGo scrape, no API key)
-  ├── tool: fetch_page  (Playwright → cleaned text)
+  ├── tool: web_search   (DuckDuckGo scrape, no API key)
+  ├── tool: fetch_page   (Playwright → cleaned text)
   ├── tool: extract_facts (LLM sub-call)
   └── tool: finish_report (writes Markdown)
       │
@@ -46,97 +82,50 @@ CLI / Streamlit UI
   reports/<slug>.md
 ```
 
-<!-- TODO: replace ASCII diagram with a proper PNG after M3 is complete -->
-
-## Quick start
-
-```bash
-git clone <repo>
-cd autoresearch-agent
-pip install -r requirements.txt
-playwright install chromium
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Run a research query via CLI
-python -m src.agent "What is the state of nuclear fusion in 2026?"
-
-# With custom depth (number of pages to visit)
-python -m src.agent "What is quantum computing?" --depth 5
-
-# Start the FastAPI backend (terminal 1)
-uvicorn src.api:app --reload
-
-# Start the Streamlit UI (terminal 2)
-streamlit run app.py
-
-# POST a research query via the API
-curl -X POST http://localhost:8000/research \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is nuclear fusion?", "depth": 2}'
-
-# Stream live agent steps via SSE
-curl -N "http://localhost:8000/research/stream?query=nuclear+fusion&depth=2"
-```
-
-The report is saved to `reports/<slug>-<timestamp>.md` and also printed to stdout.
+All LLM calls go through the Anthropic Python SDK. The loop runs until the model calls `finish_report` or the depth limit is reached.
 
 ## Project structure
 
 ```
 autoresearch-agent/
 ├── app.py               # Streamlit UI (query input, live SSE log, report panel)
+├── demo.tape            # VHS tape — run `vhs demo.tape` to regenerate demo.gif
 ├── src/
-│   ├── __init__.py      # makes src a Python package
-│   ├── agent.py         # ReAct agent loop (AgentLoop, TOOL_SCHEMAS, CLI entry point)
+│   ├── agent.py         # ReAct agent loop, tool schemas, CLI entry point
 │   ├── tools.py         # web_search, fetch_page, extract_facts, finish_report
 │   └── api.py           # FastAPI /research + /research/stream endpoints
 ├── tests/
-│   ├── __init__.py
 │   ├── test_tools.py    # smoke tests for web_search and fetch_page
 │   ├── test_agent.py    # unit tests for AgentLoop, extract_facts, finish_report
 │   ├── test_api.py      # unit tests for FastAPI endpoints (mocked agent)
-│   └── test_app.py      # smoke test for app.py (_truncate helper)
+│   └── test_app.py      # smoke test for the Streamlit helper functions
 ├── reports/             # generated Markdown reports (git-ignored)
-│   └── .gitkeep
+├── requirements.txt     # pinned runtime and test dependencies
 ├── pytest.ini           # asyncio_mode=auto, integration marker
-├── requirements.txt     # pinned runtime + test dependencies
-├── LICENSE              # MIT
-└── README.md
+└── LICENSE              # MIT
 ```
 
-**Runtime dependencies** (pinned in `requirements.txt`):
-
-| Package | Role |
-|---------|------|
-| `anthropic` | Claude API client — tool-use and completions |
-| `fastapi` + `uvicorn` | HTTP server for the `/research` endpoint |
-| `playwright` | Headless Chromium for page fetching |
-| `streamlit` | Optional browser UI |
-| `httpx` | Async HTTP client used by tools |
-| `beautifulsoup4` | HTML parsing and text extraction |
-| `python-multipart` | FastAPI form-data support |
-
-## Running tests
+Run unit tests (no network or browser required):
 
 ```bash
-# Unit tests only (no network or browser required)
 pytest -x -m "not integration" tests/
-
-# All tests including integration (requires: playwright install chromium)
-pytest -x tests/
 ```
 
 ## Roadmap
 
-- ~~**M1** — repo scaffold: `src/` layout, `requirements.txt`, `.gitignore`, MIT license, README~~ done
-- ~~**M2** — implement `web_search` (DuckDuckGo) and `fetch_page` (Playwright); smoke tests~~ done
-- ~~**M3** — implement the ReAct agent loop with citation accumulation~~ done
-- ~~**M4** — FastAPI `/research` POST + `/research/stream` SSE endpoint~~ done
-- ~~**M5** — Streamlit front-end with streaming output~~ done
-- **M6** — integration tests, Docker image, polished Quickstart
-
-<!-- TODO: link GitHub Issues or a project board here once set up -->
+- [ ] PDF and local file ingestion as additional source types
+- [ ] Persistent memory across sessions via a lightweight vector store
+- [ ] Support for local models (Ollama) as a drop-in alternative to the Anthropic SDK
+- [ ] Parallel page fetching to reduce wall-clock time on deep queries
+- [ ] Structured JSON output mode alongside the Markdown report
 
 ## License
 
-MIT © 2026 Ritik
+MIT — see LICENSE.
+
+---
+
+Built autonomously by [autodev](https://github.com/RitikPatill/autodev),
+a multi-agent orchestrator I designed. Each commit in this repo was
+authored by me; the implementation work was performed by Sonnet under
+the orchestrator's control. Read the orchestrator's README to see how.
