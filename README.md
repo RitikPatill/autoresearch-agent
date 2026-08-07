@@ -1,5 +1,9 @@
 # AutoResearch Agent
 
+
+> **Video walkthrough:** https://youtu.be/qAkIm7D2usc
+> **60-second overview:** https://youtu.be/bcbXtF3VXfM
+
 > A local AI agent that takes a research question, browses the web autonomously, and produces a cited markdown report.
 
 <!-- TODO: replace with a 5-10 second demo gif. Record with ScreenToGif on
